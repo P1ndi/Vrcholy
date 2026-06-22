@@ -139,6 +139,7 @@
         <canvas id="ar-canvas"></canvas>
         <div id="ar-overlay">
           <div id="ar-status" style="display:none"></div>
+        <div id="ar-debug" style="position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#a8d878;font-size:11px;padding:3px 10px;border-radius:12px;white-space:nowrap;">Čakám na kompas…</div>
           <svg id="compass-ring" viewBox="0 0 56 56">
             <circle cx="28" cy="28" r="26" stroke="rgba(255,255,255,0.2)" stroke-width="1" fill="none"/>
             <g id="compass-needle">
@@ -433,14 +434,19 @@ sRadius.addEventListener('input', () => { document.getElementById('s-radius-val'
 sMinelev.addEventListener('input', () => { document.getElementById('s-minelev-val').textContent = sMinelev.value + ' m'; document.getElementById('minelev-sel').value = sMinelev.value; });
 
 // ── COMPASS / ORIENTATION ──
+let headingRaw = 0;
+let headingSmooth = 0;
+let orientCount = 0;
+
 function requestOrientationPermission(cb) {
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(state => {
-      if (state === 'granted') { window.addEventListener('deviceorientationabsolute', onOrient, true); cb(true); }
-      else cb(false);
+      if (state === 'granted') {
+        window.addEventListener('deviceorientation', onOrient, true);
+        cb(true);
+      } else cb(false);
     }).catch(() => cb(false));
   } else {
-    window.addEventListener('deviceorientationabsolute', onOrient, true);
     window.addEventListener('deviceorientation', onOrient, true);
     cb(true);
   }
@@ -448,13 +454,32 @@ function requestOrientationPermission(cb) {
 
 function onOrient(e) {
   let h = null;
-  if (e.webkitCompassHeading !== undefined) h = e.webkitCompassHeading;
-  else if (e.absolute && e.alpha !== null) h = (360 - e.alpha) % 360;
-  else if (e.alpha !== null) h = (360 - e.alpha) % 360;
-  if (h !== null) heading = h;
+  // iOS: webkitCompassHeading je priamo smer pohľadu v stupňoch od severu
+  if (e.webkitCompassHeading != null && e.webkitCompassHeading >= 0) {
+    h = e.webkitCompassHeading;
+  } else if (e.absolute && e.alpha != null) {
+    h = (360 - e.alpha + 360) % 360;
+  } else if (e.alpha != null) {
+    h = (360 - e.alpha + 360) % 360;
+  }
+
+  if (h == null) return;
+
+  // smooth heading – short circular interpolation
+  let diff = h - headingSmooth;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  headingSmooth = (headingSmooth + diff * 0.15 + 360) % 360;
+  heading = headingSmooth;
+  orientCount++;
+
   // rotate compass needle
   const needle = document.getElementById('compass-needle');
   if (needle) needle.setAttribute('transform', `rotate(${heading}, 28, 28)`);
+
+  // debug overlay – zobraz heading v AR
+  const dbg = document.getElementById('ar-debug');
+  if (dbg) dbg.textContent = `Heading: ${Math.round(heading)}° (${orientCount} evt)`;
 }
 
 // ── AR ──
@@ -493,10 +518,14 @@ function drawAR() {
   const wrap = document.getElementById('ar-wrap');
 
   function resize() {
-    canvas.width = wrap.clientWidth;
-    canvas.height = wrap.clientHeight;
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    if (canvas.width !== W || canvas.height !== H) {
+      canvas.width = W;
+      canvas.height = H;
+    }
   }
   resize();
+  window.removeEventListener('resize', resize);
   window.addEventListener('resize', resize);
 
   function frame() {
