@@ -283,18 +283,16 @@ function fetchPeaks() {
 
   const query = `[out:json][timeout:25];node["natural"="peak"]["name"](around:${r},${userLat},${userLon});out body;`;
   const enc = encodeURIComponent(query);
-  const endpoints = [
-    'https://overpass-api.de/api/interpreter?data=' + enc,
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter?data=' + enc,
-    'https://overpass.kumi.systems/api/interpreter?data=' + enc
-  ];
+  const base = 'https://overpass-api.de/api/interpreter?data=' + enc;
+  const proxied = 'https://corsproxy.io/?' + encodeURIComponent(base);
 
   function tryNext(i) {
-    if (i >= endpoints.length) {
+    const urls = [proxied, base];
+    if (i >= urls.length) {
       document.getElementById('peak-list').innerHTML = '<div id="status-msg">⚠ Overpass API nedostupná. Skús neskôr alebo skontroluj pripojenie.</div>';
       return;
     }
-    fetch(endpoints[i], { mode: 'cors' })
+    fetch(urls[i])
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
     peaks = data.elements
