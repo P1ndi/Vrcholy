@@ -281,16 +281,22 @@ function fetchPeaks() {
   document.getElementById('status-msg').style.display = 'block';
   document.getElementById('peak-list').innerHTML = '<div id="status-msg">⏳ Načítavam vrchy z OpenStreetMap…</div>';
 
-  const query = `[out:json][timeout:25];
-node["natural"="peak"]["name"](around:${r},${userLat},${userLon});
-out body;`;
+  const query = `[out:json][timeout:25];node["natural"="peak"]["name"](around:${r},${userLat},${userLon});out body;`;
+  const enc = encodeURIComponent(query);
+  const endpoints = [
+    'https://overpass-api.de/api/interpreter?data=' + enc,
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter?data=' + enc,
+    'https://overpass.kumi.systems/api/interpreter?data=' + enc
+  ];
 
-  fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    body: 'data=' + encodeURIComponent(query)
-  })
-  .then(r => r.json())
-  .then(data => {
+  function tryNext(i) {
+    if (i >= endpoints.length) {
+      document.getElementById('peak-list').innerHTML = '<div id="status-msg">⚠ Overpass API nedostupná. Skús neskôr alebo skontroluj pripojenie.</div>';
+      return;
+    }
+    fetch(endpoints[i], { mode: 'cors' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
     peaks = data.elements
       .filter(e => e.tags && e.tags.name)
       .map(e => ({
@@ -306,10 +312,9 @@ out body;`;
 
     updateDistances();
     renderList();
-  })
-  .catch(err => {
-    document.getElementById('peak-list').innerHTML = '<div id="status-msg">⚠ Chyba načítavania. Skontroluj internetové pripojenie.<br><br>' + err.message + '</div>';
-  });
+    }).catch(() => tryNext(i + 1));
+  }
+  tryNext(0);
 }
 
 function detectCountry(lat, lon) {
