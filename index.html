@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Vrcholy</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0b0f0b;
+    --bg2: #141a14;
+    --bg3: #1c231c;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0ede8;
+    --muted: #7a8a7a;
+    --accent: #a8d878;
+    --accent2: #5a8a3a;
+    --warn: #e8c44a;
+    --danger: #e87060;
+    --info: #78b8e8;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+  /* ── TABS ── */
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #tabs { display: flex; background: var(--bg2); border-top: 0.5px solid var(--border); }
+  .tab-btn { flex: 1; padding: 10px 4px 8px; background: none; border: none; color: var(--muted); font-size: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .2s; }
+  .tab-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+  .tab-btn.active { color: var(--accent); }
+  #content { flex: 1; overflow: hidden; position: relative; }
+  .screen { display: none; height: 100%; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* ── TOPBAR ── */
+  .topbar { background: var(--bg2); border-bottom: 0.5px solid var(--border); padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .topbar h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .gps-pill { font-size: 10px; padding: 3px 8px; border-radius: 20px; border: 0.5px solid var(--border); display: flex; align-items: center; gap: 5px; }
+  .gps-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .gps-dot.ok { background: var(--accent); }
+  .gps-dot.loading { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+
+  /* ── LIST SCREEN ── */
+  #filter-bar { padding: 10px 14px; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  #filter-bar label { font-size: 11px; color: var(--muted); }
+  #radius-sel { background: var(--bg3); color: var(--text); border: 0.5px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; }
+  #minelev-sel { background: var(--bg3); color: var(--text); border: 0.5px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; }
+  #refresh-btn { margin-left: auto; background: var(--bg3); color: var(--accent); border: 0.5px solid var(--accent2); border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+
+  #peak-list { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+  #status-msg { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .peak-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: border-color .2s; }
+  .peak-card:hover, .peak-card:active { border-color: var(--accent2); }
+  .peak-rank { font-size: 11px; color: var(--muted); width: 18px; flex-shrink: 0; text-align: center; }
+  .peak-tri { flex-shrink: 0; }
+  .peak-body { flex: 1; min-width: 0; }
+  .peak-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .peak-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .peak-right { text-align: right; flex-shrink: 0; }
+  .peak-elev { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .peak-dist { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* ── AR SCREEN ── */
+  #ar-wrap { position: relative; flex: 1; overflow: hidden; background: #000; }
+  #ar-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  #ar-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #ar-overlay { position: absolute; inset: 0; pointer-events: none; }
+  #compass-ring { position: absolute; bottom: 20px; right: 16px; width: 56px; height: 56px; }
+  #ar-status { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.6); color: var(--warn); font-size: 11px; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
+  #ar-start-btn { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(0,0,0,.7); cursor: pointer; }
+  #ar-start-btn svg { width: 48px; height: 48px; stroke: var(--accent); fill: none; stroke-width: 1.4; }
+  #ar-start-btn p { color: var(--text); font-size: 13px; text-align: center; max-width: 220px; line-height: 1.5; }
+  #ar-start-btn button { background: var(--accent2); color: var(--text); border: none; border-radius: 10px; padding: 10px 24px; font-size: 14px; cursor: pointer; }
+
+  /* ── SETTINGS SCREEN ── */
+  #settings-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .setting-row { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+  .setting-row label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+  .setting-row input[type=range] { width: 100%; }
+  .setting-val { font-size: 13px; font-weight: 500; color: var(--accent); }
+  .setting-info { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .about { text-align: center; color: var(--muted); font-size: 11px; margin-top: 20px; line-height: 1.8; }
+
+  /* ── DETAIL MODAL ── */
+  #detail-modal { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.7); align-items: flex-end; }
+  #detail-modal.open { display: flex; }
+  #detail-box { background: var(--bg2); border-radius: 20px 20px 0 0; padding: 20px; width: 100%; border-top: 0.5px solid var(--border); }
+  #detail-box h2 { font-size: 18px; font-weight: 600; }
+  #detail-box .d-elev { font-size: 28px; font-weight: 700; color: var(--accent); margin: 4px 0; }
+  #detail-box .d-meta { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  #detail-close { float: right; background: var(--bg3); border: none; color: var(--muted); border-radius: 50%; width: 28px; height: 28px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .d-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .d-stat { background: var(--bg3); border-radius: 10px; padding: 10px 12px; }
+  .d-stat .label { font-size: 10px; color: var(--muted); }
+  .d-stat .val { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  #find-ar-btn { width: 100%; margin-top: 14px; background: var(--accent2); color: var(--text); border: none; border-radius: 10px; padding: 12px; font-size: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="content">
+
+    <!-- LIST SCREEN -->
+    <div id="screen-list" class="screen active">
+      <div class="topbar">
+        <h1>▲ Vrcholy</h1>
+        <div class="gps-pill"><div class="gps-dot loading" id="gps-dot"></div><span id="gps-label">Hľadám polohu…</span></div>
+      </div>
+      <div id="filter-bar">
+        <label>Polomer</label>
+        <select id="radius-sel">
+          <option value="20">20 km</option>
+          <option value="50" selected>50 km</option>
+          <option value="100">100 km</option>
+          <option value="150">150 km</option>
+        </select>
+        <label>Min. výška</label>
+        <select id="minelev-sel">
+          <option value="0">všetky</option>
+          <option value="500">500 m+</option>
+          <option value="1000" selected>1000 m+</option>
+          <option value="1500">1500 m+</option>
+        </select>
+        <button id="refresh-btn">Obnoviť</button>
+      </div>
+      <div id="peak-list"><div id="status-msg">Čakám na GPS…</div></div>
+    </div>
+
+    <!-- AR SCREEN -->
+    <div id="screen-ar" class="screen">
+      <div class="topbar">
+        <h1>▲ AR pohľad</h1>
+        <div class="gps-pill"><div class="gps-dot" id="gps-dot-ar"></div><span id="gps-label-ar">–</span></div>
+      </div>
+      <div id="ar-wrap">
+        <video id="ar-video" autoplay playsinline muted></video>
+        <canvas id="ar-canvas"></canvas>
+        <div id="ar-overlay">
+          <div id="ar-status" style="display:none"></div>
+          <svg id="compass-ring" viewBox="0 0 56 56">
+            <circle cx="28" cy="28" r="26" stroke="rgba(255,255,255,0.2)" stroke-width="1" fill="none"/>
+            <g id="compass-needle">
+              <polygon points="28,6 31,28 28,26 25,28" fill="#e87060"/>
+              <polygon points="28,50 31,28 28,30 25,28" fill="rgba(255,255,255,0.5)"/>
+            </g>
+            <text x="28" y="4" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="6">S</text>
+            <text x="28" y="54" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="6">J</text>
+            <text x="2" y="30" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="6">Z</text>
+            <text x="54" y="30" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="6">V</text>
+          </svg>
+        </div>
+        <div id="ar-start-btn">
+          <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18"/><circle cx="24" cy="24" r="8"/></svg>
+          <p>Pre AR pohľad je potrebný prístup ku kamere a kompasu</p>
+          <button id="start-ar-btn">Spustiť AR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="screen-settings" class="screen">
+      <div class="topbar"><h1>Nastavenia</h1></div>
+      <div id="settings-body">
+        <div class="setting-row">
+          <label>Maximálny polomer vyhľadávania</label>
+          <input type="range" id="s-radius" min="10" max="200" value="50" step="10">
+          <div class="setting-val" id="s-radius-val">50 km</div>
+        </div>
+        <div class="setting-row">
+          <label>Minimálna výška vrcholu</label>
+          <input type="range" id="s-minelev" min="0" max="2000" value="1000" step="100">
+          <div class="setting-val" id="s-minelev-val">1000 m</div>
+        </div>
+        <div class="setting-row">
+          <label>Zdroj dát</label>
+          <div style="font-size:13px;margin-top:4px;">OpenStreetMap Overpass API</div>
+          <div class="setting-info">Bezplatná komunitná databáza vrchov. Obsahuje výšky, názvy a typy vrchov pre celé Slovensko a okolité krajiny.</div>
+        </div>
+        <div class="setting-row">
+          <label>AR kompas</label>
+          <div class="setting-info">Vyžaduje DeviceOrientationEvent. Na iOS 13+ je potrebné povolenie. Funguje najlepšie vonku bez magnetického rušenia.</div>
+        </div>
+        <div class="about">
+          Vrcholy v1.0 · dáta © OpenStreetMap<br>
+          Polomer vyhľadávania a výšky podľa OSM tagov<br>
+          <br>GPS presnosť závisí od zariadenia a signálu.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="tabs">
+    <button class="tab-btn active" data-screen="list">
+      <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Zoznam
+    </button>
+    <button class="tab-btn" data-screen="ar">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      AR
+    </button>
+    <button class="tab-btn" data-screen="settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Nastavenia
+    </button>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="detail-modal">
+  <div id="detail-box">
+    <button id="detail-close">✕</button>
+    <h2 id="d-name">–</h2>
+    <div class="d-elev" id="d-elev">–</div>
+    <div class="d-meta" id="d-meta">–</div>
+    <div class="d-grid">
+      <div class="d-stat"><div class="label">Vzdialenosť</div><div class="val" id="d-dist">–</div></div>
+      <div class="d-stat"><div class="label">Azimut</div><div class="val" id="d-azimut">–</div></div>
+      <div class="d-stat"><div class="label">Typ</div><div class="val" id="d-type">–</div></div>
+      <div class="d-stat"><div class="label">Krajina</div><div class="val" id="d-country">–</div></div>
+    </div>
+    <button id="find-ar-btn">Zobraziť v AR →</button>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let userLat = null, userLon = null;
+let peaks = [];
+let heading = 0;
+let arRunning = false;
+let animFrame = null;
+let selectedPeak = null;
+
+// ── TABS ──
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const s = btn.dataset.screen;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(sc => sc.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('screen-' + s).classList.add('active');
+  });
+});
+
+// ── GPS ──
+function setGPS(ok, label) {
+  ['gps-dot','gps-dot-ar'].forEach(id => {
+    const d = document.getElementById(id);
+    d.className = 'gps-dot' + (ok === true ? ' ok' : ok === 'loading' ? ' loading' : '');
+  });
+  document.getElementById('gps-label').textContent = label;
+  document.getElementById('gps-label-ar').textContent = label;
+}
+
+function startGPS() {
+  if (!navigator.geolocation) { setGPS(false, 'GPS nepodporované'); return; }
+  setGPS('loading', 'Hľadám polohu…');
+  navigator.geolocation.watchPosition(pos => {
+    userLat = pos.coords.latitude;
+    userLon = pos.coords.longitude;
+    const acc = Math.round(pos.coords.accuracy);
+    setGPS(true, `±${acc}m`);
+    if (peaks.length === 0) fetchPeaks();
+    else updateDistances();
+  }, err => {
+    setGPS(false, 'GPS chyba');
+    document.getElementById('status-msg').textContent = '⚠ GPS nie je dostupná. Skontroluj povolenia v prehliadači.';
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 });
+}
+
+// ── OVERPASS ──
+function fetchPeaks() {
+  const r = parseInt(document.getElementById('radius-sel').value) * 1000;
+  const minelev = parseInt(document.getElementById('minelev-sel').value);
+  if (!userLat) { document.getElementById('status-msg').textContent = 'Čakám na GPS…'; return; }
+  document.getElementById('status-msg').innerHTML = '⏳ Načítavam vrchy z OpenStreetMap…';
+  document.getElementById('status-msg').style.display = 'block';
+  document.getElementById('peak-list').innerHTML = '<div id="status-msg">⏳ Načítavam vrchy z OpenStreetMap…</div>';
+
+  const query = `[out:json][timeout:25];
+node["natural"="peak"]["name"](around:${r},${userLat},${userLon});
+out body;`;
+
+  fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: 'data=' + encodeURIComponent(query)
+  })
+  .then(r => r.json())
+  .then(data => {
+    peaks = data.elements
+      .filter(e => e.tags && e.tags.name)
+      .map(e => ({
+        id: e.id,
+        name: e.tags.name,
+        lat: e.lat,
+        lon: e.lon,
+        elev: parseFloat(e.tags.ele) || null,
+        type: e.tags.natural || 'peak',
+        country: e.tags['addr:country'] || detectCountry(e.lat, e.lon)
+      }))
+      .filter(p => !minelev || !p.elev || p.elev >= minelev);
+
+    updateDistances();
+    renderList();
+  })
+  .catch(err => {
+    document.getElementById('peak-list').innerHTML = '<div id="status-msg">⚠ Chyba načítavania. Skontroluj internetové pripojenie.<br><br>' + err.message + '</div>';
+  });
+}
+
+function detectCountry(lat, lon) {
+  if (lat > 47.7 && lat < 49.6 && lon > 16.8 && lon < 22.6) return 'SK';
+  if (lat > 48.5 && lat < 51.1 && lon > 12.0 && lon < 18.9) return 'CZ';
+  if (lat > 46.4 && lat < 49.0 && lon > 9.5 && lon < 17.2) return 'AT';
+  if (lat > 45.7 && lat < 48.6 && lon > 14.1 && lon < 22.9) return 'HU';
+  return '–';
+}
+
+// ── MATH ──
+function toRad(d) { return d * Math.PI / 180; }
+function toDeg(r) { return r * 180 / Math.PI; }
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function bearing(lat1, lon1, lat2, lon2) {
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+function bearingLabel(b) {
+  const dirs = ['S','SSV','SV','VSV','V','VJV','JV','JJV','J','JJZ','JZ','ZJZ','Z','ZSZ','SZ','SSZ'];
+  return dirs[Math.round(b / 22.5) % 16];
+}
+
+function updateDistances() {
+  if (!userLat) return;
+  peaks.forEach(p => {
+    p.dist = haversine(userLat, userLon, p.lat, p.lon);
+    p.bearing = bearing(userLat, userLon, p.lat, p.lon);
+  });
+  peaks.sort((a, b) => a.dist - b.dist);
+}
+
+// ── RENDER LIST ──
+function elevTriangle(elev) {
+  if (!elev) return '<svg width="20" height="20" viewBox="0 0 20 20" style="opacity:.3"><polygon points="10,2 18,18 2,18" fill="#a8d878"/></svg>';
+  const h = Math.max(0.3, Math.min(1, elev / 2600));
+  const opacity = 0.4 + h * 0.6;
+  return `<svg width="20" height="20" viewBox="0 0 20 20"><polygon points="10,${2 + (1-h)*10} 18,18 2,18" fill="#a8d878" opacity="${opacity.toFixed(2)}"/></svg>`;
+}
+
+function renderList() {
+  const list = document.getElementById('peak-list');
+  if (peaks.length === 0) {
+    list.innerHTML = '<div id="status-msg">Žiadne vrchy nenájdené. Skús zväčšiť polomer alebo znížiť minimálnu výšku.</div>';
+    return;
+  }
+  list.innerHTML = peaks.slice(0, 80).map((p, i) => `
+    <div class="peak-card" data-id="${p.id}">
+      <div class="peak-rank">${i+1}</div>
+      <div class="peak-tri">${elevTriangle(p.elev)}</div>
+      <div class="peak-body">
+        <div class="peak-name">${p.name}</div>
+        <div class="peak-sub">${bearingLabel(p.bearing)} ${Math.round(p.bearing)}° · ${p.country}</div>
+      </div>
+      <div class="peak-right">
+        <div class="peak-elev">${p.elev ? Math.round(p.elev) + ' m' : '? m'}</div>
+        <div class="peak-dist">${p.dist < 10 ? p.dist.toFixed(1) : Math.round(p.dist)} km</div>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.peak-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = parseInt(card.dataset.id);
+      const p = peaks.find(x => x.id === id);
+      if (p) showDetail(p);
+    });
+  });
+}
+
+// ── DETAIL MODAL ──
+function showDetail(p) {
+  selectedPeak = p;
+  document.getElementById('d-name').textContent = p.name;
+  document.getElementById('d-elev').textContent = p.elev ? Math.round(p.elev) + ' m n.m.' : 'výška neznáma';
+  document.getElementById('d-meta').textContent = `${bearingLabel(p.bearing)} od teba · ${p.lat.toFixed(4)}°N, ${p.lon.toFixed(4)}°E`;
+  document.getElementById('d-dist').textContent = p.dist < 10 ? p.dist.toFixed(2) + ' km' : Math.round(p.dist) + ' km';
+  document.getElementById('d-azimut').textContent = Math.round(p.bearing) + '° ' + bearingLabel(p.bearing);
+  document.getElementById('d-type').textContent = p.type === 'peak' ? 'Vrchol' : p.type;
+  document.getElementById('d-country').textContent = p.country;
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+document.getElementById('detail-close').addEventListener('click', () => {
+  document.getElementById('detail-modal').classList.remove('open');
+});
+document.getElementById('detail-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('detail-modal'))
+    document.getElementById('detail-modal').classList.remove('open');
+});
+document.getElementById('find-ar-btn').addEventListener('click', () => {
+  document.getElementById('detail-modal').classList.remove('open');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(sc => sc.classList.remove('active'));
+  document.querySelector('[data-screen="ar"]').classList.add('active');
+  document.getElementById('screen-ar').classList.add('active');
+  if (!arRunning) startAR();
+});
+
+// ── REFRESH / FILTER ──
+document.getElementById('refresh-btn').addEventListener('click', () => {
+  peaks = [];
+  fetchPeaks();
+});
+document.getElementById('radius-sel').addEventListener('change', () => { peaks = []; fetchPeaks(); });
+document.getElementById('minelev-sel').addEventListener('change', () => { peaks = []; fetchPeaks(); });
+
+// ── SETTINGS SLIDERS ──
+const sRadius = document.getElementById('s-radius');
+const sMinelev = document.getElementById('s-minelev');
+sRadius.addEventListener('input', () => { document.getElementById('s-radius-val').textContent = sRadius.value + ' km'; document.getElementById('radius-sel').value = sRadius.value; });
+sMinelev.addEventListener('input', () => { document.getElementById('s-minelev-val').textContent = sMinelev.value + ' m'; document.getElementById('minelev-sel').value = sMinelev.value; });
+
+// ── COMPASS / ORIENTATION ──
+function requestOrientationPermission(cb) {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') { window.addEventListener('deviceorientationabsolute', onOrient, true); cb(true); }
+      else cb(false);
+    }).catch(() => cb(false));
+  } else {
+    window.addEventListener('deviceorientationabsolute', onOrient, true);
+    window.addEventListener('deviceorientation', onOrient, true);
+    cb(true);
+  }
+}
+
+function onOrient(e) {
+  let h = null;
+  if (e.webkitCompassHeading !== undefined) h = e.webkitCompassHeading;
+  else if (e.absolute && e.alpha !== null) h = (360 - e.alpha) % 360;
+  else if (e.alpha !== null) h = (360 - e.alpha) % 360;
+  if (h !== null) heading = h;
+  // rotate compass needle
+  const needle = document.getElementById('compass-needle');
+  if (needle) needle.setAttribute('transform', `rotate(${heading}, 28, 28)`);
+}
+
+// ── AR ──
+function startAR() {
+  const startDiv = document.getElementById('ar-start-btn');
+  requestOrientationPermission(granted => {
+    if (!granted) {
+      document.getElementById('ar-status').style.display = 'block';
+      document.getElementById('ar-status').textContent = '⚠ Kompas nepovolený – azimut nebude presný';
+    }
+  });
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(stream => {
+      const video = document.getElementById('ar-video');
+      video.srcObject = stream;
+      video.play();
+      startDiv.style.display = 'none';
+      arRunning = true;
+      drawAR();
+    })
+    .catch(err => {
+      startDiv.querySelector('p').textContent = '⚠ Kamera nie je dostupná: ' + err.message;
+    });
+  } else {
+    startDiv.querySelector('p').textContent = '⚠ Kamera nie je podporovaná v tomto prehliadači.';
+  }
+}
+
+document.getElementById('start-ar-btn').addEventListener('click', startAR);
+
+function drawAR() {
+  const canvas = document.getElementById('ar-canvas');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('ar-wrap');
+
+  function resize() {
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!userLat || peaks.length === 0) { animFrame = requestAnimationFrame(frame); return; }
+
+    const W = canvas.width, H = canvas.height;
+    const FOV = 70; // degrees horizontal field of view
+
+    // draw horizon line
+    ctx.strokeStyle = 'rgba(168,216,120,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.5);
+    ctx.lineTo(W, H * 0.5);
+    ctx.stroke();
+
+    // draw compass ticks
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    for (let deg = 0; deg < 360; deg += 10) {
+      const diff = ((deg - heading + 540) % 360) - 180;
+      if (Math.abs(diff) > FOV / 2 + 10) continue;
+      const x = W/2 + (diff / FOV) * W;
+      const isMajor = deg % 45 === 0;
+      ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = isMajor ? 1.5 : 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 20); ctx.lineTo(x, isMajor ? 36 : 28); ctx.stroke();
+      if (isMajor) {
+        const label = ['S','SV','V','JV','J','JZ','Z','SZ'][deg/45];
+        ctx.fillStyle = deg === 0 ? '#e87060' : 'rgba(255,255,255,0.7)';
+        ctx.fillText(label, x, 50);
+      }
+    }
+
+    // draw peaks visible in current heading
+    const sorted = [...peaks].filter(p => p.elev).sort((a,b) => a.dist - b.dist);
+    sorted.slice(0, 30).forEach(p => {
+      const diff = ((p.bearing - heading + 540) % 360) - 180;
+      if (Math.abs(diff) > FOV / 2 + 5) return;
+
+      const x = W/2 + (diff / FOV) * W;
+      // vertical: closer and higher peaks appear higher
+      const elevFactor = p.elev ? (p.elev - 500) / 2000 : 0.3;
+      const distFactor = Math.max(0, 1 - p.dist / 150);
+      const y = H * 0.55 - (elevFactor * distFactor * H * 0.25);
+
+      const alpha = Math.abs(diff) < FOV/4 ? 1 : 1 - (Math.abs(diff) - FOV/4) / (FOV/4);
+
+      // triangle
+      ctx.beginPath();
+      ctx.moveTo(x, y - 14);
+      ctx.lineTo(x + 8, y);
+      ctx.lineTo(x - 8, y);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(168,216,120,${alpha * 0.9})`;
+      ctx.fill();
+
+      // label box
+      const label1 = p.name;
+      const label2 = (p.elev ? Math.round(p.elev) + 'm' : '') + ' · ' + (p.dist < 10 ? p.dist.toFixed(1) : Math.round(p.dist)) + 'km';
+      const boxW = Math.max(ctx.measureText(label1).width, ctx.measureText(label2).width) + 16;
+      const boxH = 32;
+      const boxX = Math.max(4, Math.min(W - boxW - 4, x - boxW/2));
+      const boxY = y - 18 - boxH;
+
+      ctx.fillStyle = `rgba(11,15,11,${alpha * 0.82})`;
+      roundRect(ctx, boxX, boxY, boxW, boxH, 6);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.5})`;
+      ctx.lineWidth = 0.5;
+      roundRect(ctx, boxX, boxY, boxW, boxH, 6);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(240,237,232,${alpha})`;
+      ctx.font = `500 12px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(label1, boxX + boxW/2, boxY + 13);
+      ctx.fillStyle = `rgba(122,138,122,${alpha})`;
+      ctx.font = `10px -apple-system, sans-serif`;
+      ctx.fillText(label2, boxX + boxW/2, boxY + 25);
+
+      // connecting line
+      ctx.beginPath();
+      ctx.moveTo(x, y - 18);
+      ctx.lineTo(x, boxY + boxH);
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.4})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    });
+
+    animFrame = requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ── INIT ──
+startGPS();
+</script>
+</body>
+</html>
