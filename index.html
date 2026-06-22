@@ -531,174 +531,95 @@ function drawAR() {
   window.removeEventListener('resize', resize);
   window.addEventListener('resize', resize);
 
-  // Terrain silhouette – simple bezier hills based on peak positions
-  function drawTerrain(visiblePeaks, W, H, horizonY) {
-    if (visiblePeaks.length < 1) return;
-    ctx.beginPath();
-    ctx.moveTo(0, horizonY);
-
-    // build terrain points from visible peaks + edges
-    const pts = [{x: 0, y: horizonY}];
-    visiblePeaks.forEach(({x, peakY}) => {
-      pts.push({x, y: peakY + 8});
-    });
-    pts.push({x: W, y: horizonY});
-    pts.sort((a,b) => a.x - b.x);
-
-    // smooth curve through points
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const mx = (pts[i].x + pts[i+1].x) / 2;
-      const my = (pts[i].y + pts[i+1].y) / 2;
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
-    }
-    ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
-    ctx.lineTo(W, horizonY + 2);
-    ctx.lineTo(0, horizonY + 2);
-    ctx.closePath();
-
-    // subtle fill below terrain
-    const grad = ctx.createLinearGradient(0, horizonY - 60, 0, horizonY + 20);
-    grad.addColorStop(0, 'rgba(168,216,120,0.08)');
-    grad.addColorStop(1, 'rgba(168,216,120,0.0)');
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // terrain outline
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const mx = (pts[i].x + pts[i+1].x) / 2;
-      const my = (pts[i].y + pts[i+1].y) / 2;
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
-    }
-    ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
-    ctx.strokeStyle = 'rgba(168,216,120,0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  // Draw rotated pin label (like in the screenshot)
-  function drawPin(x, baseY, pinTopY, label, elevDist, alpha) {
-    const pinH = baseY - pinTopY;
-
-    // vertical stick
-    ctx.beginPath();
-    ctx.moveTo(x, baseY);
-    ctx.lineTo(x, pinTopY);
-    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.7})`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // dot at base
-    ctx.beginPath();
-    ctx.arc(x, baseY, 3, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(168,216,120,${alpha})`;
-    ctx.fill();
-
-    // rotated label pill
-    const labelText = label;
-    const subText = elevDist;
-    const pillW = Math.max(
-      ctx.measureText(labelText).width,
-      ctx.measureText(subText).width
-    ) + 20;
-    const pillH = 22;
-
-    ctx.save();
-    ctx.translate(x, pinTopY);
-    ctx.rotate(-Math.PI / 2); // rotate 90° = vertical text going upward
-
-    // pill background
-    ctx.beginPath();
-    ctx.roundRect(-pillW/2, -pillH/2, pillW, pillH, 6);
-    ctx.fillStyle = `rgba(0,20,10,${alpha * 0.85})`;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.6})`;
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-
-    // label text
-    ctx.fillStyle = `rgba(240,237,232,${alpha})`;
-    ctx.font = `500 11px -apple-system, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(labelText, 0, -3);
-
-    // elevation + distance
-    ctx.fillStyle = `rgba(168,216,120,${alpha * 0.9})`;
-    ctx.font = `10px -apple-system, sans-serif`;
-    ctx.fillText(subText, 0, 9);
-
-    ctx.restore();
-  }
-
   function frame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!userLat || peaks.length === 0) { animFrame = requestAnimationFrame(frame); return; }
 
     const W = canvas.width, H = canvas.height;
-    const FOV = 70;
-    const horizonY = H * 0.62; // horizon line position
+    const FOV = 70; // degrees horizontal field of view
 
-    // ── Compass bar at top ──
+    // draw horizon line
+    ctx.strokeStyle = 'rgba(168,216,120,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.5);
+    ctx.lineTo(W, H * 0.5);
+    ctx.stroke();
+
+    // draw compass ticks
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '10px -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    for (let deg = 0; deg < 360; deg += 5) {
+    for (let deg = 0; deg < 360; deg += 10) {
       const diff = ((deg - heading + 540) % 360) - 180;
-      if (Math.abs(diff) > FOV / 2 + 5) continue;
+      if (Math.abs(diff) > FOV / 2 + 10) continue;
       const x = W/2 + (diff / FOV) * W;
       const isMajor = deg % 45 === 0;
-      const is10 = deg % 10 === 0;
-      if (!is10 && !isMajor) continue;
-      ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.2)';
+      ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
       ctx.lineWidth = isMajor ? 1.5 : 0.5;
-      ctx.beginPath(); ctx.moveTo(x, 16); ctx.lineTo(x, isMajor ? 32 : 24); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, 20); ctx.lineTo(x, isMajor ? 36 : 28); ctx.stroke();
       if (isMajor) {
-        const lbl = ['S','SV','V','JV','J','JZ','Z','SZ'][deg/45];
-        ctx.fillStyle = deg === 0 ? '#e87060' : 'rgba(255,255,255,0.8)';
-        ctx.fillText(lbl, x, 46);
+        const label = ['S','SV','V','JV','J','JZ','Z','SZ'][deg/45];
+        ctx.fillStyle = deg === 0 ? '#e87060' : 'rgba(255,255,255,0.7)';
+        ctx.fillText(label, x, 50);
       }
     }
-    // center crosshair
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(W/2, 12); ctx.lineTo(W/2, 50); ctx.stroke();
 
-    // ── Horizon line ──
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 8]);
-    ctx.beginPath(); ctx.moveTo(0, horizonY); ctx.lineTo(W, horizonY); ctx.stroke();
-    ctx.setLineDash([]);
-
-    // ── Collect visible peaks ──
-    const allPeaks = [...peaks].filter(p => p.elev).sort((a,b) => b.elev - a.elev);
-    const visible = [];
-
-    allPeaks.slice(0, 40).forEach(p => {
+    // draw peaks visible in current heading
+    const sorted = [...peaks].filter(p => p.elev).sort((a,b) => a.dist - b.dist);
+    sorted.slice(0, 30).forEach(p => {
       const diff = ((p.bearing - heading + 540) % 360) - 180;
-      if (Math.abs(diff) > FOV / 2 + 8) return;
+      if (Math.abs(diff) > FOV / 2 + 5) return;
+
       const x = W/2 + (diff / FOV) * W;
+      // vertical: closer and higher peaks appear higher
+      const elevFactor = p.elev ? (p.elev - 500) / 2000 : 0.3;
+      const distFactor = Math.max(0, 1 - p.dist / 150);
+      const y = H * 0.55 - (elevFactor * distFactor * H * 0.25);
 
-      // pin height: higher and closer peaks get taller pins
-      const elevN = Math.min(1, Math.max(0, (p.elev - 200) / 2200));
-      const distN = Math.max(0, 1 - p.dist / 120);
-      const pinHeight = 60 + elevN * 120 + distN * 40;
-      const pinTopY = horizonY - pinHeight;
-      const alpha = Math.abs(diff) < FOV/3 ? 1 : Math.max(0.3, 1 - (Math.abs(diff) - FOV/3) / (FOV/6));
+      const alpha = Math.abs(diff) < FOV/4 ? 1 : 1 - (Math.abs(diff) - FOV/4) / (FOV/4);
 
-      visible.push({ x, baseY: horizonY, peakY: pinTopY, p, alpha });
-    });
+      // triangle
+      ctx.beginPath();
+      ctx.moveTo(x, y - 14);
+      ctx.lineTo(x + 8, y);
+      ctx.lineTo(x - 8, y);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(168,216,120,${alpha * 0.9})`;
+      ctx.fill();
 
-    // ── Draw terrain silhouette ──
-    drawTerrain(visible, W, H, horizonY);
+      // label box
+      const label1 = p.name;
+      const label2 = (p.elev ? Math.round(p.elev) + 'm' : '') + ' · ' + (p.dist < 10 ? p.dist.toFixed(1) : Math.round(p.dist)) + 'km';
+      const boxW = Math.max(ctx.measureText(label1).width, ctx.measureText(label2).width) + 16;
+      const boxH = 32;
+      const boxX = Math.max(4, Math.min(W - boxW - 4, x - boxW/2));
+      const boxY = y - 18 - boxH;
 
-    // ── Draw pins (far to near so near is on top) ──
-    const sorted = [...visible].sort((a,b) => b.p.dist - a.p.dist);
-    sorted.forEach(({x, baseY, peakY, p, alpha}) => {
-      const elevStr = p.elev ? Math.round(p.elev) + ' m' : '? m';
-      const distStr = p.dist < 10 ? p.dist.toFixed(1) + ' km' : Math.round(p.dist) + ' km';
-      drawPin(x, baseY, peakY, p.name, elevStr + '  ' + distStr, alpha);
+      ctx.fillStyle = `rgba(11,15,11,${alpha * 0.82})`;
+      roundRect(ctx, boxX, boxY, boxW, boxH, 6);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.5})`;
+      ctx.lineWidth = 0.5;
+      roundRect(ctx, boxX, boxY, boxW, boxH, 6);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(240,237,232,${alpha})`;
+      ctx.font = `500 12px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(label1, boxX + boxW/2, boxY + 13);
+      ctx.fillStyle = `rgba(122,138,122,${alpha})`;
+      ctx.font = `10px -apple-system, sans-serif`;
+      ctx.fillText(label2, boxX + boxW/2, boxY + 25);
+
+      // connecting line
+      ctx.beginPath();
+      ctx.moveTo(x, y - 18);
+      ctx.lineTo(x, boxY + boxH);
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.4})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
     });
 
     animFrame = requestAnimationFrame(frame);
