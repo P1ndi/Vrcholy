@@ -111,18 +111,16 @@
       <div id="filter-bar">
         <label>Polomer</label>
         <select id="radius-sel">
-          <option value="10" selected>10 km</option>
-          <option value="20" >20 km</option>
-          <option value="50" >50 km</option>
-         <!-- <option value="100">100 km</option>
-           <option value="150">150 km</option> -->
+          <option value="20">20 km</option>
+          <option value="50" selected>50 km</option>
+          <option value="100">100 km</option>
+          <option value="150">150 km</option>
         </select>
         <label>Min. výška</label>
         <select id="minelev-sel">
           <option value="0">všetky</option>
-          <option value="300" selected>300 m+</option>
           <option value="500">500 m+</option>
-          <option value="1000" >1000 m+</option>
+          <option value="1000" selected>1000 m+</option>
           <option value="1500">1500 m+</option>
         </select>
         <button id="refresh-btn">Obnoviť</button>
@@ -580,38 +578,49 @@ function drawAR() {
     ctx.stroke();
   }
 
-  // LOD: <10km zeleny stítok, 10-20km tyčka+názov, >20km len názov
-  function drawPin(x, baseY, pinTopY, p, alpha) {
-    const dist = p.dist;
-    const lod = dist < 10 ? 'full' : dist < 20 ? 'stick' : 'name';
+  // Všetky vrchy v zábere = plný štítok, mimo záber = tyčka
+  function drawPin(x, baseY, pinTopY, p, alpha, inView) {
     const elevStr = p.elev ? Math.round(p.elev) + ' m' : '';
     const W = canvas.width;
 
-    if (lod === 'full') {
-      // zelená tyčka
-      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, pinTopY);
-      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.9})`; ctx.lineWidth = 1.5; ctx.stroke();
-      // bodka
+    if (inView) {
+      // ── Plný štítok: trojuholník + box s názvom + výška ──
+      // trojuholník pri vrchole tyčky
+      const triH = 10, triW = 8;
+      ctx.beginPath();
+      ctx.moveTo(x, pinTopY);
+      ctx.lineTo(x - triW, pinTopY + triH);
+      ctx.lineTo(x + triW, pinTopY + triH);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(168,216,120,${alpha * 0.95})`;
+      ctx.fill();
+
+      // tyčka od trojuholníka po horizont
+      ctx.beginPath(); ctx.moveTo(x, pinTopY + triH); ctx.lineTo(x, baseY);
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.7})`; ctx.lineWidth = 1.5; ctx.stroke();
+
+      // bodka pri horizonte
       ctx.beginPath(); ctx.arc(x, baseY, 3, 0, Math.PI*2);
       ctx.fillStyle = `rgba(168,216,120,${alpha})`; ctx.fill();
 
-      // box
+      // box nad trojuholníkom
       ctx.font = `500 12px -apple-system, sans-serif`;
       const nameW = ctx.measureText(p.name).width;
       ctx.font = `10px -apple-system, sans-serif`;
-      const subW = ctx.measureText(elevStr).width;
+      const subW = elevStr ? ctx.measureText(elevStr).width : 0;
       const boxW = Math.max(nameW, subW) + 18;
       const boxH = elevStr ? 36 : 24;
       const boxX = Math.max(4, Math.min(W - boxW - 4, x - boxW/2));
-      const boxY = pinTopY - boxH - 4;
+      const boxY = pinTopY - boxH - 6;
 
       roundRect(ctx, boxX, boxY, boxW, boxH, 8);
       ctx.fillStyle = `rgba(0,18,8,${alpha * 0.88})`; ctx.fill();
       ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.7})`; ctx.lineWidth = 1;
       roundRect(ctx, boxX, boxY, boxW, boxH, 8); ctx.stroke();
 
+      // čiara box → trojuholník
       ctx.beginPath(); ctx.moveTo(x, pinTopY); ctx.lineTo(x, boxY + boxH);
-      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.4})`; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.35})`; ctx.lineWidth = 0.8; ctx.stroke();
 
       ctx.fillStyle = `rgba(240,237,232,${alpha})`;
       ctx.font = `500 12px -apple-system, sans-serif`; ctx.textAlign = 'center';
@@ -622,29 +631,12 @@ function drawAR() {
         ctx.fillText(elevStr, boxX + boxW/2, boxY + 27);
       }
 
-    } else if (lod === 'stick') {
-      // modrá tyčka
-      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, pinTopY);
-      ctx.strokeStyle = `rgba(120,184,232,${alpha * 0.75})`; ctx.lineWidth = 1.2; ctx.stroke();
-      ctx.beginPath(); ctx.arc(x, baseY, 2.5, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(120,184,232,${alpha * 0.8})`; ctx.fill();
-
-      // názov hore pri vrchole tyčky
-      ctx.font = `10px -apple-system, sans-serif`; ctx.textAlign = 'center';
-      const tw = ctx.measureText(p.name).width;
-      const tx = Math.max(tw/2 + 4, Math.min(W - tw/2 - 4, x));
-      ctx.fillStyle = `rgba(0,15,25,${alpha * 0.75})`;
-      ctx.fillRect(tx - tw/2 - 4, pinTopY - 17, tw + 8, 14);
-      ctx.fillStyle = `rgba(200,224,248,${alpha * 0.95})`;
-      ctx.fillText(p.name, tx, pinTopY - 6);
-
     } else {
-      // len malý šedý názov bez tyčky – pri horizonte
-      ctx.font = `9px -apple-system, sans-serif`; ctx.textAlign = 'center';
-      const tw = ctx.measureText(p.name).width;
-      const tx = Math.max(tw/2 + 4, Math.min(W - tw/2 - 4, x));
-      ctx.fillStyle = `rgba(180,180,180,${alpha * 0.5})`;
-      ctx.fillText(p.name, tx, baseY - 6);
+      // ── Len tyčka – vrch nie je v aktuálnom zábere ──
+      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, pinTopY);
+      ctx.strokeStyle = `rgba(120,184,232,${alpha * 0.4})`; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, baseY, 2, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(120,184,232,${alpha * 0.5})`; ctx.fill();
     }
   }
 
@@ -688,21 +680,26 @@ function drawAR() {
 
     allPeaks.forEach(p => {
       const diff = ((p.bearing - heading + 540) % 360) - 180;
-      if (Math.abs(diff) > FOV/2 + 6) return;
+      // inView = vrchol je v aktuálnom zábere kamery
+      const inView = Math.abs(diff) <= FOV / 2;
+      // kresliť aj trochu mimo záber (tyčky na okraji)
+      if (Math.abs(diff) > FOV / 2 + 15) return;
+
       const x = W/2 + (diff / FOV) * W;
       const elevN = Math.min(1, Math.max(0, (p.elev - 200) / 2200));
       const distN = Math.max(0, 1 - p.dist / 50);
       const pinHeight = 50 + elevN * 110 + distN * 60;
       const pinTopY = horizonY - pinHeight;
-      const alpha = Math.abs(diff) < FOV/3 ? 1 : Math.max(0.3, 1 - (Math.abs(diff) - FOV/3) / (FOV/5));
-      visible.push({ x, baseY: horizonY, peakY: pinTopY, p, alpha });
+      const alpha = inView ? 1 : Math.max(0.15, 1 - (Math.abs(diff) - FOV/2) / 15);
+      visible.push({ x, baseY: horizonY, peakY: pinTopY, p, alpha, inView });
     });
 
     drawTerrain(visible, W, H, horizonY);
 
-    // kresli od najdalej po najblizsie
+    // kresli: najprv tyčky (mimo záber), potom štítky (v zábere) – správne vrstvy
     const byDist = [...visible].sort((a,b) => b.p.dist - a.p.dist);
-    byDist.forEach(({x, baseY, peakY, p, alpha}) => drawPin(x, baseY, peakY, p, alpha));
+    byDist.filter(v => !v.inView).forEach(({x, baseY, peakY, p, alpha, inView}) => drawPin(x, baseY, peakY, p, alpha, inView));
+    byDist.filter(v => v.inView).forEach(({x, baseY, peakY, p, alpha, inView}) => drawPin(x, baseY, peakY, p, alpha, inView));
 
     animFrame = requestAnimationFrame(frame);
   }
