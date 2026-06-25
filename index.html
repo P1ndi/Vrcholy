@@ -578,86 +578,71 @@ function drawAR() {
     ctx.stroke();
   }
 
-  // LOD: full label <15km, short label 15-50km, stick only >50km
+  // LOD: <10km zeleny stítok, 10-20km tyčka+názov, >20km len názov
   function drawPin(x, baseY, pinTopY, p, alpha) {
     const dist = p.dist;
-    const lod = dist < 15 ? 'full' : dist < 50 ? 'short' : 'stick';
-    const stickColor = lod === 'full'
-      ? `rgba(168,216,120,${alpha * 0.9})`
-      : lod === 'short'
-      ? `rgba(120,184,232,${alpha * 0.7})`
-      : `rgba(160,160,160,${alpha * 0.35})`;
-
-    ctx.beginPath();
-    ctx.moveTo(x, baseY);
-    ctx.lineTo(x, pinTopY);
-    ctx.strokeStyle = stickColor;
-    ctx.lineWidth = lod === 'stick' ? 0.8 : 1.5;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(x, baseY, lod === 'stick' ? 2 : 3, 0, Math.PI * 2);
-    ctx.fillStyle = stickColor;
-    ctx.fill();
-
-    if (lod === 'stick') return;
-
-    const elevStr = p.elev ? Math.round(p.elev) + ' m' : '? m';
-    const distStr = p.dist < 10 ? p.dist.toFixed(1) + ' km' : Math.round(p.dist) + ' km';
+    const lod = dist < 10 ? 'full' : dist < 20 ? 'stick' : 'name';
+    const elevStr = p.elev ? Math.round(p.elev) + ' m' : '';
     const W = canvas.width;
 
     if (lod === 'full') {
+      // zelená tyčka
+      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, pinTopY);
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.9})`; ctx.lineWidth = 1.5; ctx.stroke();
+      // bodka
+      ctx.beginPath(); ctx.arc(x, baseY, 3, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(168,216,120,${alpha})`; ctx.fill();
+
+      // box
       ctx.font = `500 12px -apple-system, sans-serif`;
       const nameW = ctx.measureText(p.name).width;
       ctx.font = `10px -apple-system, sans-serif`;
-      const subW = ctx.measureText(elevStr + '  ' + distStr).width;
+      const subW = ctx.measureText(elevStr).width;
       const boxW = Math.max(nameW, subW) + 18;
-      const boxH = 36;
-      const boxX = Math.max(4, Math.min(W - boxW - 4, x - boxW / 2));
+      const boxH = elevStr ? 36 : 24;
+      const boxX = Math.max(4, Math.min(W - boxW - 4, x - boxW/2));
       const boxY = pinTopY - boxH - 4;
 
       roundRect(ctx, boxX, boxY, boxW, boxH, 8);
-      ctx.fillStyle = `rgba(0,18,8,${alpha * 0.88})`;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.7})`;
-      ctx.lineWidth = 1;
-      roundRect(ctx, boxX, boxY, boxW, boxH, 8);
-      ctx.stroke();
+      ctx.fillStyle = `rgba(0,18,8,${alpha * 0.88})`; ctx.fill();
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.7})`; ctx.lineWidth = 1;
+      roundRect(ctx, boxX, boxY, boxW, boxH, 8); ctx.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(x, pinTopY);
-      ctx.lineTo(x, boxY + boxH);
-      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.4})`;
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, pinTopY); ctx.lineTo(x, boxY + boxH);
+      ctx.strokeStyle = `rgba(168,216,120,${alpha * 0.4})`; ctx.lineWidth = 0.8; ctx.stroke();
 
       ctx.fillStyle = `rgba(240,237,232,${alpha})`;
-      ctx.font = `500 12px -apple-system, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(p.name, boxX + boxW / 2, boxY + 14);
-      ctx.fillStyle = `rgba(168,216,120,${alpha * 0.9})`;
-      ctx.font = `10px -apple-system, sans-serif`;
-      ctx.fillText(elevStr + '   ' + distStr, boxX + boxW / 2, boxY + 27);
+      ctx.font = `500 12px -apple-system, sans-serif`; ctx.textAlign = 'center';
+      ctx.fillText(p.name, boxX + boxW/2, boxY + (elevStr ? 14 : 16));
+      if (elevStr) {
+        ctx.fillStyle = `rgba(168,216,120,${alpha * 0.9})`;
+        ctx.font = `10px -apple-system, sans-serif`;
+        ctx.fillText(elevStr, boxX + boxW/2, boxY + 27);
+      }
+
+    } else if (lod === 'stick') {
+      // modrá tyčka
+      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, pinTopY);
+      ctx.strokeStyle = `rgba(120,184,232,${alpha * 0.75})`; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, baseY, 2.5, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(120,184,232,${alpha * 0.8})`; ctx.fill();
+
+      // názov hore pri vrchole tyčky
+      ctx.font = `10px -apple-system, sans-serif`; ctx.textAlign = 'center';
+      const tw = ctx.measureText(p.name).width;
+      const tx = Math.max(tw/2 + 4, Math.min(W - tw/2 - 4, x));
+      ctx.fillStyle = `rgba(0,15,25,${alpha * 0.75})`;
+      ctx.fillRect(tx - tw/2 - 4, pinTopY - 17, tw + 8, 14);
+      ctx.fillStyle = `rgba(200,224,248,${alpha * 0.95})`;
+      ctx.fillText(p.name, tx, pinTopY - 6);
 
     } else {
-      ctx.font = `10px -apple-system, sans-serif`;
-      const pillW = ctx.measureText(p.name + '  ' + elevStr).width + 16;
-      const pillH = 18;
-      const pillX = Math.max(4, Math.min(W - pillW - 4, x - pillW / 2));
-      const pillY = pinTopY - pillH - 3;
-
-      roundRect(ctx, pillX, pillY, pillW, pillH, 9);
-      ctx.fillStyle = `rgba(0,15,25,${alpha * 0.8})`;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(120,184,232,${alpha * 0.5})`;
-      ctx.lineWidth = 0.6;
-      roundRect(ctx, pillX, pillY, pillW, pillH, 9);
-      ctx.stroke();
-
-      ctx.fillStyle = `rgba(200,220,240,${alpha * 0.9})`;
-      ctx.font = `10px -apple-system, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(p.name + '  ' + elevStr, pillX + pillW / 2, pillY + 12);
+      // len malý šedý názov bez tyčky – pri horizonte
+      ctx.font = `9px -apple-system, sans-serif`; ctx.textAlign = 'center';
+      const tw = ctx.measureText(p.name).width;
+      const tx = Math.max(tw/2 + 4, Math.min(W - tw/2 - 4, x));
+      ctx.fillStyle = `rgba(180,180,180,${alpha * 0.5})`;
+      ctx.fillText(p.name, tx, baseY - 6);
     }
   }
 
@@ -669,11 +654,11 @@ function drawAR() {
     const FOV = 70;
     const horizonY = H * 0.60;
 
-    ctx.font = '10px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
+    // kompas
+    ctx.font = '10px -apple-system, sans-serif'; ctx.textAlign = 'center';
     for (let deg = 0; deg < 360; deg += 5) {
       const diff = ((deg - heading + 540) % 360) - 180;
-      if (Math.abs(diff) > FOV / 2 + 5) continue;
+      if (Math.abs(diff) > FOV/2 + 5) continue;
       const x = W/2 + (diff / FOV) * W;
       const isMajor = deg % 45 === 0;
       if (deg % 10 !== 0 && !isMajor) continue;
@@ -686,33 +671,34 @@ function drawAR() {
         ctx.fillText(lbl, x, 46);
       }
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(W/2, 12); ctx.lineTo(W/2, 50); ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 1;
+    // horizont
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
     ctx.setLineDash([4, 10]);
     ctx.beginPath(); ctx.moveTo(0, horizonY); ctx.lineTo(W, horizonY); ctx.stroke();
     ctx.setLineDash([]);
 
-    const allPeaks = [...peaks].filter(p => p.elev).sort((a,b) => b.elev - a.elev);
+    // vrchy – max 50km
+    const allPeaks = [...peaks].filter(p => p.elev && p.dist <= 50).sort((a,b) => b.elev - a.elev);
     const visible = [];
 
-    allPeaks.slice(0, 60).forEach(p => {
+    allPeaks.forEach(p => {
       const diff = ((p.bearing - heading + 540) % 360) - 180;
-      if (Math.abs(diff) > FOV / 2 + 6) return;
+      if (Math.abs(diff) > FOV/2 + 6) return;
       const x = W/2 + (diff / FOV) * W;
       const elevN = Math.min(1, Math.max(0, (p.elev - 200) / 2200));
-      const distN = Math.max(0, 1 - p.dist / 120);
-      const pinHeight = 50 + elevN * 110 + distN * 50;
+      const distN = Math.max(0, 1 - p.dist / 50);
+      const pinHeight = 50 + elevN * 110 + distN * 60;
       const pinTopY = horizonY - pinHeight;
-      const alpha = Math.abs(diff) < FOV/3 ? 1 : Math.max(0.25, 1 - (Math.abs(diff) - FOV/3) / (FOV/5));
+      const alpha = Math.abs(diff) < FOV/3 ? 1 : Math.max(0.3, 1 - (Math.abs(diff) - FOV/3) / (FOV/5));
       visible.push({ x, baseY: horizonY, peakY: pinTopY, p, alpha });
     });
 
     drawTerrain(visible, W, H, horizonY);
 
+    // kresli od najdalej po najblizsie
     const byDist = [...visible].sort((a,b) => b.p.dist - a.p.dist);
     byDist.forEach(({x, baseY, peakY, p, alpha}) => drawPin(x, baseY, peakY, p, alpha));
 
